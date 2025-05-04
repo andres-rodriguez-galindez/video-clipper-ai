@@ -1,0 +1,5 @@
+opencv-python
+moviepy
+tensorflow
+numpy
+scikit-learn
