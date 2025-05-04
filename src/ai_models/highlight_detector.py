@@ -68,4 +68,6 @@ class HighlightDetector:
     def get_frame_score(self, frame):
         """Retorna una puntuación normalizada para el frame"""
         metrics = self.analyze_frame(frame)
-        return metrics['score']
+        if isinstance(metrics, dict):
+            return metrics['score']
+        return metrics

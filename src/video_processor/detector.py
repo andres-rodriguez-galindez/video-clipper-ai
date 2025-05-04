@@ -67,7 +67,9 @@ class Detector:
         
         for frame in video.iter_frames():
             frame_inicio = time.time()
-            score = self.model.analyze_frame(frame)
+            result = self.model.analyze_frame(frame)
+            # Extraer solo el valor de score del diccionario
+            score = result['score'] if isinstance(result, dict) else result
             scores.append(score)
             frames_processed += 1
             
