@@ -12,8 +12,11 @@ def main():
     # Cargar el video
     video = load_video(video_path)
 
-    # Inicializar el detector y el clipper
-    detector = Detector()
+    # Crear primero el modelo de detección
+    highlight_model = HighlightDetector()
+    
+    # Pasar el modelo al crear el detector
+    detector = Detector(model=highlight_model)
     clipper = Clipper()
 
     # Detectar los mejores momentos
