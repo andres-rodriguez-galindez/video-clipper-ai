@@ -99,14 +99,11 @@ def main():
             duracion_video = video.duration
             print(f"Duración del video: {format_time(duracion_video)}")
             
-            # Detectar momentos destacados con barra de progreso
+            # Detectar momentos destacados
             print("\nAnalizando video...")
             tiempo_inicio_analisis = time.time()
-            
-            # Obtener el número total de frames
             total_frames = int(video.fps * video.duration)
             
-            # Crear barra de progreso
             with tqdm(total=total_frames, desc="Progreso") as pbar:
                 def update_progress():
                     tiempo_actual = time.time() - tiempo_inicio_analisis
@@ -114,15 +111,15 @@ def main():
                         'Tiempo': format_time(tiempo_actual),
                         'Frames/s': f"{pbar.n / tiempo_actual:.1f}" if tiempo_actual > 0 else "0.0"
                     })
+                    pbar.update(1)
                 
-                highlights = detector.detect_highlights(video, progress_callback=update_progress)
+                highlights, tiempo_total = detector.detect_highlights(video, progress_callback=update_progress)
             
-            tiempo_analisis = time.time() - tiempo_inicio_analisis
-            print(f"\nAnálisis completado en {format_time(tiempo_analisis)}")
-            print(f"Velocidad promedio: {total_frames / tiempo_analisis:.1f} frames/s")
+            print(f"\nAnálisis completado en {format_time(tiempo_total)}")
+            print(f"Velocidad promedio: {total_frames / tiempo_total:.1f} frames/s")
             
             if not highlights:
-                print("No se encontraron momentos destacados en el video.")
+                print("No se encontraron clips que cumplan con los criterios.")
                 continue
                 
             print(f"Se encontraron {len(highlights)} momentos destacados")
@@ -135,44 +132,29 @@ def main():
                 print(f"  └─ Inicio: {format_time(start_time)}")
                 print(f"  └─ Fin: {format_time(end_time)}")
                 print(f"  └─ Duración: {format_time(duration)}")
-            
-            # Preguntar si desea guardar los clips
-            respuesta = input("\n¿Desea guardar los clips? (s/n): ").lower()
-            if respuesta != 's':
-                print("Operación cancelada.")
-                continue
-            
-            print("\nProcesando clips uno por uno...")
-            for i, (start_time, end_time) in enumerate(highlights, 1):
-                print(f"\nClip {i}/{len(highlights)}:")
-                print(f"Duración: {format_time(end_time - start_time)}")
                 
-                if i > 1:
-                    continuar = input("\n¿Desea procesar este clip? (s/n): ").lower()
-                    if continuar != 's':
-                        print("Saltando clip...")
-                        continue
-                
-                clip_info = (i, (start_time, end_time), video_path, output_dir)
-                i, success, result, tiempo_total = process_clip(clip_info, detector)
-                
-                if success:
-                    print(f"✓ Clip {i} completado:")
-                    print(f"  └─ Guardado en: {result}")
-                    print(f"  └─ Tiempo total: {format_time(tiempo_total)}")
+                if i == 1 or input(f"\n¿Desea procesar el clip {i}? (s/n): ").lower() == 's':
+                    clip_info = (i, (start_time, end_time), video_path, output_dir)
+                    success, result = process_clip(clip_info, detector)
+                    
+                    if success:
+                        print(f"✓ Clip {i} guardado en: {result}")
+                    else:
+                        print(f"✗ Error al procesar clip {i}: {result}")
                 else:
-                    print(f"✗ Error en clip {i}: {result}")
+                    print(f"Clip {i} saltado.")
             
-            # Mostrar estadísticas finales
+            # Mostrar estadísticas
             stats = detector.get_stats_summary()
-            print("\n=== Estadísticas de Procesamiento ===")
-            print(f"Análisis por frame: {stats['analisis_promedio']:.3f} segundos")
-            print(f"Recorte promedio: {stats['recorte_promedio']:.3f} segundos")
-            print(f"Exportación promedio: {stats['exportacion_promedio']:.3f} segundos")
+            if isinstance(stats, dict):
+                print("\n=== Estadísticas de Procesamiento ===")
+                print(f"Análisis por frame: {stats['analisis_promedio']:.3f} segundos")
+                print(f"Recorte promedio: {stats['recorte_promedio']:.3f} segundos")
+                print(f"Exportación promedio: {stats['exportacion_promedio']:.3f} segundos")
             
             tiempo_total = time.time() - tiempo_inicio
             print("\n✓ Proceso completado:")
-            print(f"└─ Tiempo de análisis: {format_time(tiempo_analisis)}")
+            print(f"└─ Tiempo de análisis: {format_time(tiempo_total)}")
             print(f"└─ Tiempo total: {format_time(tiempo_total)}")
             print(f"\nClips guardados en: {output_dir.absolute()}")
             

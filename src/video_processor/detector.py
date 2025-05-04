@@ -81,6 +81,10 @@ class Detector:
         # Encontrar los mejores segmentos
         highlights = self._find_best_segments(scores, video.fps)
         
+        if not highlights:
+            print("No se encontraron momentos destacados que cumplan con los criterios")
+            return [], tiempo_total
+        
         return highlights, time.time() - tiempo_inicio
 
     def get_stats_summary(self):
