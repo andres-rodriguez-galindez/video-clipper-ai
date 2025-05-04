@@ -78,6 +78,9 @@ class Detector:
             if progress_callback:
                 progress_callback()
         
+        # Calcular tiempo total
+        tiempo_total = time.time() - tiempo_inicio
+        
         # Encontrar los mejores segmentos
         highlights = self._find_best_segments(scores, video.fps)
         
@@ -85,7 +88,7 @@ class Detector:
             print("No se encontraron momentos destacados que cumplan con los criterios")
             return [], tiempo_total
         
-        return highlights, time.time() - tiempo_inicio
+        return highlights, tiempo_total
 
     def get_stats_summary(self):
         """Retorna un resumen de las estadísticas"""
