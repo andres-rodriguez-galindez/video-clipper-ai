@@ -33,14 +33,20 @@ def format_time(seconds):
     """Convierte segundos a formato HH:MM:SS"""
     return str(timedelta(seconds=int(seconds)))
 
-def process_clip(clip_info):
+def process_clip(clip_info, detector):
     """Procesa un clip individual"""
     i, (start_time, end_time), video_path, output_dir = clip_info
     try:
+        tiempo_inicio = time.time()
         video = VideoFileClip(video_path)
+        
+        tiempo_recorte = time.time()
         clip = video.subclip(start_time, end_time)
+        detector.stats['tiempos_recorte'].append(time.time() - tiempo_recorte)
+        
         output_path = output_dir / f"highlight_{i}.mp4"
         
+        tiempo_export = time.time()
         clip.write_videofile(
             str(output_path),
             codec='libx264',
@@ -48,12 +54,16 @@ def process_clip(clip_info):
             temp_audiofile=f'temp-audio_{i}.m4a',
             remove_temp=True,
             logger=None,
-            preset='ultrafast'  # Más rápido encoding
+            preset='veryslow',  # Mejor calidad
+            bitrate='8000k'     # Alta tasa de bits
         )
+        detector.stats['tiempos_exportacion'].append(time.time() - tiempo_export)
+        
         video.close()
-        return i, True, output_path
+        return i, True, output_path, time.time() - tiempo_inicio
+        
     except Exception as e:
-        return i, False, str(e)
+        return i, False, str(e), 0
 
 def main():
     # Verificar disponibilidad de GPU
@@ -89,12 +99,27 @@ def main():
             duracion_video = video.duration
             print(f"Duración del video: {format_time(duracion_video)}")
             
-            # Detectar momentos destacados
+            # Detectar momentos destacados con barra de progreso
             print("\nAnalizando video...")
-            highlights = detector.detect_highlights(video)
+            tiempo_inicio_analisis = time.time()
             
-            tiempo_analisis = time.time() - tiempo_inicio
+            # Obtener el número total de frames
+            total_frames = int(video.fps * video.duration)
+            
+            # Crear barra de progreso
+            with tqdm(total=total_frames, desc="Progreso") as pbar:
+                def update_progress():
+                    tiempo_actual = time.time() - tiempo_inicio_analisis
+                    pbar.set_postfix({
+                        'Tiempo': format_time(tiempo_actual),
+                        'Frames/s': f"{pbar.n / tiempo_actual:.1f}" if tiempo_actual > 0 else "0.0"
+                    })
+                
+                highlights = detector.detect_highlights(video, progress_callback=update_progress)
+            
+            tiempo_analisis = time.time() - tiempo_inicio_analisis
             print(f"\nAnálisis completado en {format_time(tiempo_analisis)}")
+            print(f"Velocidad promedio: {total_frames / tiempo_analisis:.1f} frames/s")
             
             if not highlights:
                 print("No se encontraron momentos destacados en el video.")
@@ -117,40 +142,37 @@ def main():
                 print("Operación cancelada.")
                 continue
             
-            # Guardar los clips en paralelo
-            print("\nGuardando clips...")
-            tiempo_guardado = time.time()
-            
-            # Preparar información para procesamiento paralelo
-            clip_infos = [
-                (i, (start_time, end_time), video_path, output_dir)
-                for i, (start_time, end_time) in enumerate(highlights, 1)
-            ]
-            
-            # Procesar clips en paralelo
-            with ThreadPoolExecutor(max_workers=min(4, len(highlights))) as executor:
-                futures = list(tqdm(
-                    executor.map(process_clip, clip_infos),
-                    total=len(clip_infos),
-                    desc="Procesando clips"
-                ))
-            
-            # Verificar resultados
-            errores = []
-            for i, success, result in futures:
+            print("\nProcesando clips uno por uno...")
+            for i, (start_time, end_time) in enumerate(highlights, 1):
+                print(f"\nClip {i}/{len(highlights)}:")
+                print(f"Duración: {format_time(end_time - start_time)}")
+                
+                if i > 1:
+                    continuar = input("\n¿Desea procesar este clip? (s/n): ").lower()
+                    if continuar != 's':
+                        print("Saltando clip...")
+                        continue
+                
+                clip_info = (i, (start_time, end_time), video_path, output_dir)
+                i, success, result, tiempo_total = process_clip(clip_info, detector)
+                
                 if success:
-                    print(f"✓ Clip {i} guardado en: {result}")
+                    print(f"✓ Clip {i} completado:")
+                    print(f"  └─ Guardado en: {result}")
+                    print(f"  └─ Tiempo total: {format_time(tiempo_total)}")
                 else:
                     print(f"✗ Error en clip {i}: {result}")
-                    errores.append(i)
             
-            if errores:
-                print(f"\n⚠️ {len(errores)} clips tuvieron errores: {errores}")
+            # Mostrar estadísticas finales
+            stats = detector.get_stats_summary()
+            print("\n=== Estadísticas de Procesamiento ===")
+            print(f"Análisis por frame: {stats['analisis_promedio']:.3f} segundos")
+            print(f"Recorte promedio: {stats['recorte_promedio']:.3f} segundos")
+            print(f"Exportación promedio: {stats['exportacion_promedio']:.3f} segundos")
             
             tiempo_total = time.time() - tiempo_inicio
             print("\n✓ Proceso completado:")
             print(f"└─ Tiempo de análisis: {format_time(tiempo_analisis)}")
-            print(f"└─ Tiempo de guardado: {format_time(time.time() - tiempo_guardado)}")
             print(f"└─ Tiempo total: {format_time(tiempo_total)}")
             print(f"\nClips guardados en: {output_dir.absolute()}")
             
